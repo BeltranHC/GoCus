@@ -1,0 +1,451 @@
+# Especificación del Proyecto ERP/POS Multisucursal
+
+## Objetivo
+
+Quiero desarrollar desde cero un sistema ERP/POS moderno, profesional, escalable y modular.
+
+Este proyecto no es un ejercicio académico ni un sistema de ejemplo. Será un producto real que crecerá con el tiempo y podrá comercializarse.
+
+La arquitectura debe estar preparada para soportar cientos de miles de registros, múltiples empresas, múltiples sucursales y muchos usuarios conectados simultáneamente.
+
+No quiero código improvisado ni soluciones rápidas. Todo debe seguir buenas prácticas de arquitectura, principios SOLID, Clean Architecture, separación de responsabilidades y código limpio.
+
+---
+
+# Tecnologías obligatorias
+
+## Backend
+
+* Node.js LTS
+* TypeScript
+* NestJS
+* Prisma ORM
+* PostgreSQL
+* JWT
+* Passport
+* bcrypt
+* Swagger
+* Docker
+* Docker Compose
+* ESLint
+* Prettier
+* Husky
+* dotenv
+* Helmet
+* CORS
+* Rate Limiter
+
+---
+
+## Frontend
+
+* React
+* TypeScript
+* Vite
+* TailwindCSS
+* React Router
+* TanStack Query
+* Zustand
+* Axios
+* React Hook Form
+* Zod
+* HeroUI
+* Lucide Icons
+
+---
+
+## Base de datos
+
+Utilizar PostgreSQL.
+
+Configurar Prisma completamente.
+
+Crear migraciones.
+
+Crear datos iniciales (Seed).
+
+---
+
+# Configuración automática
+
+Quiero que instales y configures automáticamente:
+
+* Backend
+* Frontend
+* PostgreSQL
+* Prisma
+* Docker
+* Docker Compose
+* Variables de entorno
+* ESLint
+* Prettier
+* Husky
+* Swagger
+
+Todo debe quedar listo para ejecutarse mediante Docker Compose.
+
+No quiero realizar configuraciones manuales innecesarias.
+
+---
+
+# Arquitectura
+
+El proyecto deberá dividirse en dos carpetas principales.
+
+```text
+ERP-POS/
+
+backend/
+
+frontend/
+```
+
+Dentro del backend crear la siguiente estructura.
+
+```text
+backend/src
+
+app/
+config/
+common/
+database/
+
+auth/
+users/
+roles/
+permissions/
+
+companies/
+branches/
+warehouses/
+
+products/
+categories/
+brands/
+units/
+
+customers/
+suppliers/
+
+sales/
+purchases/
+
+inventory/
+kardex/
+
+cash/
+
+dashboard/
+
+reports/
+
+audit/
+
+notifications/
+
+settings/
+```
+
+Cada módulo debe contener como mínimo:
+
+* Module
+* Controller
+* Service
+* DTO
+* Entity
+* Repository
+* Interfaces
+* Validators
+* Guards (cuando aplique)
+
+---
+
+# Frontend
+
+Crear la siguiente estructura.
+
+```text
+frontend/src
+
+api/
+
+assets/
+
+components/
+
+layouts/
+
+modules/
+
+pages/
+
+routes/
+
+hooks/
+
+store/
+
+services/
+
+types/
+
+utils/
+
+styles/
+```
+
+Cada módulo deberá ser independiente.
+
+---
+
+# Tipo de sistema
+
+El sistema será Multiempresa.
+
+Cada empresa podrá tener varias sucursales.
+
+Cada sucursal podrá tener uno o varios almacenes.
+
+Cada sucursal tendrá sus propias cajas.
+
+Cada sucursal tendrá su propio inventario.
+
+Cada sucursal tendrá sus propios usuarios.
+
+---
+
+# Jerarquía
+
+```text
+Sistema
+
+↓
+
+Empresa
+
+↓
+
+Sucursal
+
+↓
+
+Almacén
+
+↓
+
+Caja
+
+↓
+
+Ventas
+```
+
+---
+
+# Roles
+
+El sistema debe quedar preparado para manejar los siguientes perfiles.
+
+* Super Administrador
+* Administrador General
+* Administrador de Sucursal
+* Supervisor
+* Cajero
+* Almacenero
+* Vendedor
+
+Los permisos deben ser dinámicos.
+
+No deben estar escritos directamente en el código.
+
+---
+
+# Dashboard
+
+El Administrador General deberá visualizar información consolidada de todas las sucursales.
+
+Ejemplo:
+
+* Ventas del día
+* Ventas del mes
+* Utilidad
+* Compras
+* Productos
+* Clientes
+* Usuarios
+* Stock crítico
+* Productos agotados
+* Productos más vendidos
+* Ventas por sucursal
+* Ranking de sucursales
+* Ranking de vendedores
+
+Debe existir un filtro por:
+
+* Empresa
+* Sucursal
+* Fecha
+
+---
+
+# Panel del Administrador de Sucursal
+
+Solo visualizará la información correspondiente a su sucursal.
+
+No debe tener acceso a otras sedes.
+
+---
+
+# Inventario
+
+Cada sucursal tendrá su propio inventario.
+
+El sistema debe permitir posteriormente:
+
+* Kardex
+* Ajustes
+* Transferencias entre sucursales
+* Stock mínimo
+* Stock máximo
+* Lotes
+* Series
+* Productos con vencimiento
+
+---
+
+# Ventas
+
+Preparar la arquitectura para soportar:
+
+* POS
+* Facturas
+* Boletas
+* Cotizaciones
+* Pedidos
+* Devoluciones
+* Notas de crédito
+* Notas de débito
+* Múltiples métodos de pago
+
+---
+
+# Compras
+
+Preparar:
+
+* Órdenes de compra
+* Recepción
+* Proveedores
+* Gastos
+
+---
+
+# Caja
+
+Preparar:
+
+* Apertura
+* Cierre
+* Arqueo
+* Movimientos
+
+---
+
+# Reportes
+
+Preparar la estructura para generar:
+
+* PDF
+* Excel
+
+Filtros por:
+
+* Empresa
+* Sucursal
+* Fecha
+* Producto
+* Cliente
+* Vendedor
+
+---
+
+# Seguridad
+
+Implementar desde el inicio.
+
+* JWT
+* Refresh Token
+* Roles
+* Permisos
+* Guards
+* Middleware
+* Auditoría
+* Registro de acciones
+* Helmet
+* Validaciones globales
+* Manejo global de errores
+
+---
+
+# Calidad del proyecto
+
+Configurar:
+
+* ESLint
+* Prettier
+* Alias de rutas
+* Variables de entorno
+* Logger
+* Configuración por ambientes
+* Código limpio
+* Arquitectura modular
+
+---
+
+# Docker
+
+Crear automáticamente:
+
+* PostgreSQL
+* Backend
+* Frontend
+
+Todo debe iniciar correctamente con Docker Compose.
+
+---
+
+# Documentación
+
+Generar un README completo con:
+
+* Instalación
+* Requisitos
+* Estructura
+* Tecnologías utilizadas
+* Comandos
+* Variables de entorno
+* Docker
+* Prisma
+* Scripts disponibles
+
+---
+
+# Requisitos importantes
+
+No desarrolles todavía la lógica de negocio completa.
+
+Quiero únicamente una base sólida y profesional sobre la cual construiremos el sistema paso a paso.
+
+No generes módulos innecesarios ni código repetido.
+
+Prefiero calidad antes que cantidad.
+
+Cada decisión de arquitectura debe estar justificada.
+
+Al finalizar:
+
+1. Explica toda la arquitectura creada.
+2. Muestra el árbol completo del proyecto.
+3. Indica cómo ejecutar el sistema.
+4. Verifica que backend, frontend y base de datos funcionen correctamente.
+5. Deja el proyecto listo para comenzar el desarrollo del primer módulo (Autenticación y Usuarios).
