@@ -395,8 +395,10 @@ model Sale {
   userId String @map("user_id")
   user   User   @relation(fields: [userId], references: [id])
 
-  details SaleDetail[]
+  details      SaleDetail[]
+  cashMovement CashMovement[]
 
+  @@unique([series, correlative])
   @@index([branchId])
   @@index([createdAt])
   @@index([status])
@@ -581,7 +583,11 @@ model CashMovement {
   cashRegisterId String       @map("cash_register_id")
   cashRegister   CashRegister @relation(fields: [cashRegisterId], references: [id])
 
+  saleId String? @map("sale_id")
+  sale   Sale?   @relation(fields: [saleId], references: [id])
+
   @@index([cashRegisterId])
   @@index([createdAt])
+  @@index([saleId])
   @@map("cash_movements")
 }

@@ -155,55 +155,79 @@ async function main() {
   console.log(`   ✅ Empresa "${company.name}" creada`);
 
   // ──────────────────────────────────────────
-  // 4. Crear sucursal principal
+  // 4. Crear sucursales (Sedes)
   // ──────────────────────────────────────────
-  console.log('🏪 Creando sucursal principal...');
-  const branch = await prisma.branch.upsert({
-    where: {
-      companyId_name: {
+  console.log('🏪 Creando sucursales (Sedes)...');
+  const branchesData = [
+    { name: 'Sucursal Principal (Cusco)', code: 'CUS-001', address: 'Cusco Centro' },
+    { name: 'Sucursal Juliaca', code: 'JUL-001', address: 'Juliaca Centro' },
+    { name: 'Sucursal Puerto Maldonado', code: 'PEM-001', address: 'Puerto Maldonado Centro' },
+  ];
+
+  const createdBranches: Record<string, string> = {};
+
+  for (const branchData of branchesData) {
+    const branch = await prisma.branch.upsert({
+      where: {
+        companyId_name: {
+          companyId: company.id,
+          name: branchData.name,
+        },
+      },
+      update: {},
+      create: {
+        name: branchData.name,
+        code: branchData.code,
+        address: branchData.address,
+        phone: '+1234567890',
+        email: `${branchData.code.toLowerCase()}@gocus.com`,
         companyId: company.id,
-        name: 'Sucursal Principal',
       },
-    },
-    update: {},
-    create: {
-      name: 'Sucursal Principal',
-      code: 'SUC-001',
-      address: 'Dirección sucursal principal',
-      phone: '+1234567890',
-      email: 'principal@gocus.com',
-      companyId: company.id,
-    },
-  });
-  console.log(`   ✅ Sucursal "${branch.name}" creada`);
+    });
+    createdBranches[branchData.code] = branch.id;
+    console.log(`   ✅ Sucursal "${branch.name}" creada`);
+  }
+
+  // Obtenemos la rama principal (Cusco) para los almacenes y usuarios por defecto
+  const branchId = createdBranches['CUS-001'];
 
   // ──────────────────────────────────────────
-  // 5. Crear almacén principal
+  // 5. Crear almacenes por cada sede
   // ──────────────────────────────────────────
-  console.log('📦 Creando almacén principal...');
-  const warehouse = await prisma.warehouse.upsert({
-    where: {
-      branchId_name: {
-        branchId: branch.id,
-        name: 'Almacén Principal',
+  console.log('📦 Creando almacenes...');
+  const createdWarehouses: Record<string, string> = {};
+
+  for (const branchData of branchesData) {
+    const bId = createdBranches[branchData.code];
+    const warehouse = await prisma.warehouse.upsert({
+      where: {
+        branchId_name: {
+          branchId: bId,
+          name: `Almacén ${branchData.name}`,
+        },
       },
-    },
-    update: {},
-    create: {
-      name: 'Almacén Principal',
-      code: 'ALM-001',
-      address: 'Dentro de la sucursal principal',
-      branchId: branch.id,
-    },
-  });
-  console.log(`   ✅ Almacén "${warehouse.name}" creado`);
+      update: {},
+      create: {
+        name: `Almacén ${branchData.name}`,
+        code: `ALM-${branchData.code}`,
+        address: `Dentro de ${branchData.name}`,
+        branchId: bId,
+      },
+    });
+    createdWarehouses[branchData.code] = warehouse.id;
+    console.log(`   ✅ Almacén "${warehouse.name}" creado`);
+  }
+
+  // Almacén principal
+  const warehouseId = createdWarehouses['CUS-001'];
 
   // ──────────────────────────────────────────
-  // 6. Crear Super Administrador
+  // 6. Crear Administradores
   // ──────────────────────────────────────────
-  console.log('👤 Creando Super Administrador...');
+  console.log('👤 Creando Administradores...');
   const hashedPassword = await bcrypt.hash('Admin123!', 12);
 
+  // 1. Admin Default
   await prisma.user.upsert({
     where: { email: 'admin@gocus.com' },
     update: {},
@@ -214,10 +238,42 @@ async function main() {
       lastName: 'Administrador',
       roleId: roleIds['Super Administrador'],
       companyId: company.id,
-      branchId: branch.id,
+      branchId: branchId,
     },
   });
   console.log('   ✅ Usuario admin@gocus.com / Admin123!');
+
+  // 2. Gonzalo
+  await prisma.user.upsert({
+    where: { email: 'gonzalo@gocus.com' },
+    update: {},
+    create: {
+      email: 'gonzalo@gocus.com',
+      password: hashedPassword,
+      firstName: 'Gonzalo',
+      lastName: 'Admin',
+      roleId: roleIds['Super Administrador'],
+      companyId: company.id,
+      branchId: branchId,
+    },
+  });
+  console.log('   ✅ Usuario gonzalo@gocus.com / Admin123!');
+
+  // 3. JuniDev
+  await prisma.user.upsert({
+    where: { email: 'junidev@gocus.com' },
+    update: {},
+    create: {
+      email: 'junidev@gocus.com',
+      password: hashedPassword,
+      firstName: 'JuniDev',
+      lastName: 'Admin',
+      roleId: roleIds['Super Administrador'],
+      companyId: company.id,
+      branchId: branchId,
+    },
+  });
+  console.log('   ✅ Usuario junidev@gocus.com / Admin123!');
 
   // ──────────────────────────────────────────
   // 7. Crear Categorías
@@ -275,6 +331,107 @@ async function main() {
     }
   }
   console.log('   ✅ Categorías y subcategorías creadas');
+
+  // ──────────────────────────────────────────
+  // 8. Crear Marcas y Unidades
+  // ──────────────────────────────────────────
+  console.log('🔖 Creando marcas y unidades...');
+  const brandStarlink = await prisma.brand.upsert({
+    where: { name: 'Starlink' },
+    update: {},
+    create: { name: 'Starlink' }
+  });
+  const brandLogitech = await prisma.brand.upsert({
+    where: { name: 'Logitech' },
+    update: {},
+    create: { name: 'Logitech' }
+  });
+  const brandTplink = await prisma.brand.upsert({
+    where: { name: 'TP-Link' },
+    update: {},
+    create: { name: 'TP-Link' }
+  });
+
+  const unitUnd = await prisma.unit.upsert({
+    where: { name: 'Unidad' },
+    update: {},
+    create: { name: 'Unidad', abbreviation: 'UND' }
+  });
+  console.log('   ✅ Marcas y unidades creadas');
+
+  // ──────────────────────────────────────────
+  // 9. Crear Productos Semilla y Stock
+  // ──────────────────────────────────────────
+  console.log('📦 Creando productos semilla y stock...');
+  const catStarlink = await prisma.category.findFirst({ where: { name: 'STARLINK' } });
+  const catRedes = await prisma.category.findFirst({ where: { name: 'EQUIPOS DE RED' } });
+  const catPerifericos = await prisma.category.findFirst({ where: { name: 'PERIFERICOS' } });
+
+  const productsData = [
+    {
+      name: 'STARLINK MINI INTERNET SATELITAL',
+      sku: 'SL-MINI-01',
+      barcode: '741258963001',
+      purchasePrice: 800.00,
+      salePrice: 990.00,
+      categoryId: catStarlink?.id,
+      brandId: brandStarlink.id,
+      unitId: unitUnd.id,
+      stock: 10
+    },
+    {
+      name: 'ROUTER TP-LINK ARCHER C50 AC1200',
+      sku: 'TPL-AC1200',
+      barcode: '741258963002',
+      purchasePrice: 90.00,
+      salePrice: 120.00,
+      categoryId: catRedes?.id,
+      brandId: brandTplink.id,
+      unitId: unitUnd.id,
+      stock: 25
+    },
+    {
+      name: 'MOUSE LOGITECH G502 HERO',
+      sku: 'LOG-G502',
+      barcode: '741258963003',
+      purchasePrice: 130.00,
+      salePrice: 185.00,
+      categoryId: catPerifericos?.id,
+      brandId: brandLogitech.id,
+      unitId: unitUnd.id,
+      stock: 15
+    }
+  ];
+
+  for (const pData of productsData) {
+    const { stock, ...prodFields } = pData;
+    const product = await prisma.product.upsert({
+      where: { sku: prodFields.sku },
+      update: {},
+      create: {
+        ...prodFields,
+        branchId: branchId,
+      }
+    });
+
+    // Agregar inventario inicial
+    await prisma.inventory.upsert({
+      where: {
+        productId_warehouseId: {
+          productId: product.id,
+          warehouseId: warehouseId,
+        }
+      },
+      update: { quantity: stock },
+      create: {
+        quantity: stock,
+        productId: product.id,
+        warehouseId: warehouseId,
+        branchId: branchId,
+      }
+    });
+  }
+  console.log('   ✅ Productos y stock creados');
 
   console.log('\n🎉 Seed completado exitosamente!');
 }

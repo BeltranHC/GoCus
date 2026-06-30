@@ -45,3 +45,7 @@ backend/prisma/migrations/**/migration_lock.toml
 # Misc
 *.tsbuildinfo
 .eslintcache
+
+# User files
+river2_marcos.pdf
+inicio.txt

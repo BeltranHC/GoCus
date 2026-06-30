@@ -2,7 +2,7 @@
 // GOCus ERP/POS — Bootstrap
 // ============================================
 
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -28,19 +28,20 @@ async function bootstrap() {
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'blob:'],
           connectSrc: ["'self'"],
-          frameSrc: ["'none'"],
-          objectSrc: ["'none'"],
+          frameAncestors: ["'self'", 'http://localhost:5173', 'http://localhost:5174'],
           baseUri: ["'self'"],
           formAction: ["'self'"],
         },
       },
       crossOriginEmbedderPolicy: false, // Required for fonts
+      crossOriginResourcePolicy: { policy: "cross-origin" },
       hsts: {
         maxAge: 31536000,
         includeSubDomains: true,
         preload: true,
       },
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      frameguard: false, // Disable X-Frame-Options since CSP frameAncestors handles it
     }),
   );
   app.enableCors({
@@ -67,7 +68,7 @@ async function bootstrap() {
   // ── Interceptores globales ──
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
-    new TransformInterceptor(),
+    new TransformInterceptor(app.get(Reflector)),
   );
 
   // ── Swagger ──

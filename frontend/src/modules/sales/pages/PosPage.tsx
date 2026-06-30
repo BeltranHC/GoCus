@@ -2,7 +2,20 @@
 // GOCus — Page: Punto de Venta (POS)
 // ============================================
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  createSale,
+  fetchSalePdfBlob,
+  type Sale,
+  type SaleDocumentType,
+  type PaymentMethod,
+} from '../../../api/sales';
+import {
+  getProducts,
+  type Product as ApiProduct,
+} from '../../../api/products';
+import { storage } from '../../../utils/storage';
+import { STORAGE_KEYS, API_URL } from '../../../utils/constants';
 import {
   Search,
   ShoppingCart,
@@ -18,62 +31,124 @@ import {
   Ruler,
   X,
   Smartphone,
+  CheckCircle2,
+  Download,
+  MessageCircle,
+  PlusCircle,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import '../../../styles/pos.css';
 
 // ── Types ──
-interface Product {
+interface PosProduct {
   id: string;
   name: string;
   price: number;
   stock: number;
   category: string;
+  categoryId: string | null;
+  unit: string;
 }
 
-interface CartItem extends Product {
+interface CartItem extends PosProduct {
   quantity: number;
 }
 
 // ── Category Definitions ──
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { key: 'all', label: 'Todos', icon: <Ruler size={14} /> },
-  { key: 'starlink', label: 'Starlink', icon: <Smartphone size={14} /> },
-  { key: 'redes', label: 'Redes', icon: <Smartphone size={14} /> },
-  { key: 'proteccion', label: 'Protección', icon: <Smartphone size={14} /> },
-  { key: 'cables', label: 'Cables', icon: <Smartphone size={14} /> },
-  { key: 'solar', label: 'Solar', icon: <Smartphone size={14} /> },
-  { key: 'perifericos', label: 'Periféricos', icon: <Smartphone size={14} /> },
-];
-
-// ── Mock Products ──
-const MOCK_PRODUCTS: Product[] = [
-  { id: '1', name: 'STARLINK MINI INTERNET SATELITAL', price: 990.00, stock: 10, category: 'starlink' },
-  { id: '2', name: 'FORZA FVR-902 ESTABILIZADOR 900 VA', price: 65.00, stock: 25, category: 'proteccion' },
-  { id: '3', name: 'ROUTER TP-LINK ARCHER C50 AC1200', price: 120.00, stock: 5, category: 'redes' },
-  { id: '4', name: 'CABLE RED CAT6 30M EXTERIOR', price: 45.00, stock: 50, category: 'cables' },
-  { id: '5', name: 'PANEL SOLAR 550W MONOCRISTALINO', price: 750.00, stock: 8, category: 'solar' },
-  { id: '6', name: 'MOUSE LOGITECH G502 HERO', price: 185.00, stock: 15, category: 'perifericos' },
-  { id: '7', name: 'TECLADO REDRAGON KUMARA K552 RGB', price: 135.00, stock: 12, category: 'perifericos' },
-  { id: '8', name: 'SWITCH TP-LINK 8 PUERTOS GIGABIT', price: 85.00, stock: 20, category: 'redes' },
-  { id: '9', name: 'UPS FORZA NT-751 750VA INTERACTIVO', price: 210.00, stock: 7, category: 'proteccion' },
-  { id: '10', name: 'CABLE HDMI 2.1 3M ULTRA HD 8K', price: 35.00, stock: 40, category: 'cables' },
-  { id: '11', name: 'STARLINK STANDARD KIT COMPLETO', price: 1599.00, stock: 3, category: 'starlink' },
-  { id: '12', name: 'INVERSOR SOLAR 3KW HÍBRIDO', price: 2800.00, stock: 4, category: 'solar' },
 ];
 
 export const PosPage = () => {
   // ── State ──
+  const [products, setProducts] = useState<PosProduct[]>([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [customerDoc, setCustomerDoc] = useState('');
   const [customerName, setCustomerName] = useState('CLIENTE VARIOS');
-  const [documentType, setDocumentType] = useState('BOLETA');
+  const [documentType, setDocumentType] = useState<SaleDocumentType>('BOLETA');
   const [serie, setSerie] = useState('B001');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showMobileCart, setShowMobileCart] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+
+  // ── Load products from API ──
+  const loadProducts = useCallback(async (search?: string) => {
+    try {
+      setIsLoadingProducts(true);
+      setLoadError(null);
+      const apiProducts = await getProducts(search);
+      
+      // Transform API products to POS products
+      const posProducts: PosProduct[] = apiProducts
+        .filter((p) => p.isActive)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: Number(p.salePrice),
+          stock: 999, // TODO: integrate with inventory when available
+          category: p.category?.name || 'Sin categoría',
+          categoryId: p.categoryId || null,
+          unit: p.unit?.abbreviation || 'UND',
+        }));
+
+      setProducts(posProducts);
+
+      // Build dynamic category list from loaded products
+      const uniqueCategories = new Map<string, string>();
+      posProducts.forEach((p) => {
+        if (p.categoryId && p.category !== 'Sin categoría') {
+          uniqueCategories.set(p.categoryId, p.category);
+        }
+      });
+
+      const dynamicCategories = [
+        { key: 'all', label: 'Todos', icon: <Ruler size={14} /> },
+        ...Array.from(uniqueCategories.entries()).map(([id, name]) => ({
+          key: id,
+          label: name,
+          icon: <Smartphone size={14} />,
+        })),
+      ];
+      setCategories(dynamicCategories);
+    } catch (err) {
+      console.error('Error loading products:', err);
+      setLoadError('No se pudieron cargar los productos. Verifica tu conexión.');
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+    };
+  }, [pdfPreviewUrl]);
+
+  // ── Search with debounce ──
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm.length >= 2) {
+        loadProducts(searchTerm);
+      } else if (searchTerm.length === 0) {
+        loadProducts();
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, loadProducts]);
 
   // ── Customer lookup simulation ──
   const handleDocChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,15 +165,15 @@ export const PosPage = () => {
     }
   };
 
-  // ── Filter products ──
-  const filteredProducts = MOCK_PRODUCTS.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = activeCategory === 'all' || p.category === activeCategory;
-    return matchesSearch && matchesCategory;
+  // ── Filter products (local filter by category) ──
+  const filteredProducts = products.filter((p) => {
+    const matchesCategory =
+      activeCategory === 'all' || p.categoryId === activeCategory;
+    return matchesCategory;
   });
 
   // ── Cart operations ──
-  const addToCart = (product: Product) => {
+  const addToCart = (product: PosProduct) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
@@ -136,33 +211,72 @@ export const PosPage = () => {
   const total = subtotal;
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const closeSuccessModal = () => {
+    if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+    setPdfPreviewUrl(null);
+    setShowSuccessModal(false);
+  };
+
   // ── Process sale ──
   const handleProcessSale = async () => {
     if (cart.length === 0) return;
     setIsProcessing(true);
     try {
-      const payload = {
+      const sale = await createSale({
         documentType,
-        serie,
-        date,
-        customer: { doc: customerDoc, name: customerName },
         paymentMethod,
-        items: cart.map((c) => ({ productId: c.id, quantity: c.quantity, unitPrice: c.price })),
-      };
-      console.log('Sending payload:', payload);
-      await new Promise((r) => setTimeout(r, 1000));
-      alert('✅ Venta procesada exitosamente!');
+        items: cart.map((c) => ({
+          productId: c.id,
+          quantity: c.quantity,
+          unitPrice: c.price,
+        })),
+      });
+
+      // Use direct API URL with token to support iframe native features correctly
+      const token = storage.get(STORAGE_KEYS.ACCESS_TOKEN);
+      const url = `${API_URL}/sales/${sale.id}/pdf?token=${token}`;
+
+      setLastSale(sale);
+      setPdfPreviewUrl(url);
       setCart([]);
-      setCustomerDoc('');
-      setCustomerName('CLIENTE VARIOS');
+      setShowSuccessModal(true);
       setShowMobileCart(false);
     } catch (error) {
       console.error(error);
-      alert('❌ Error procesando venta');
+      alert('❌ Error procesando venta. Revise la consola para más detalles.');
     } finally {
       setIsProcessing(false);
     }
   };
+
+  const handlePrintReceipt = () => {
+    if (!pdfPreviewUrl) return;
+    const printWindow = window.open(pdfPreviewUrl, '_blank');
+    printWindow?.addEventListener('load', () => printWindow.print());
+  };
+
+  const handleDownloadReceipt = () => {
+    if (!pdfPreviewUrl || !lastSale) return;
+    const link = document.createElement('a');
+    // Remove the #toolbar=0 hash if present for the download link
+    const cleanUrl = pdfPreviewUrl.split('#')[0];
+    link.href = cleanUrl;
+    link.download = `comprobante-${lastSale.series ?? 'DOC'}-${(lastSale.correlative ?? 0).toString().padStart(7, '0')}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const resetPos = () => {
+    closeSuccessModal();
+    setCustomerDoc('');
+    setCustomerName('CLIENTE VARIOS');
+    setDocumentType('BOLETA');
+    setSerie('B001');
+    setLastSale(null);
+  };
+
+  const saleTotal = lastSale ? Number(lastSale.total) : total;
 
   // ── Cart Content (shared between desktop and mobile) ──
   const renderCartContent = () => (
@@ -207,7 +321,7 @@ export const PosPage = () => {
             </label>
             <select
               value={documentType}
-              onChange={(e) => setDocumentType(e.target.value)}
+              onChange={(e) => setDocumentType(e.target.value as SaleDocumentType)}
               className="pos__doc-select"
             >
               <option value="BOLETA">Boleta</option>
@@ -320,11 +434,14 @@ export const PosPage = () => {
           disabled={cart.length === 0 || isProcessing}
         >
           {isProcessing ? (
-            'Procesando...'
+            <>
+              <Loader2 size={20} className="pos__spinner" />
+              Procesando...
+            </>
           ) : (
             <>
-              <Printer size={20} />
-              COBRAR E IMPRIMIR
+              <CheckCircle2 size={20} />
+              PROCESAR VENTA
             </>
           )}
         </button>
@@ -351,7 +468,7 @@ export const PosPage = () => {
 
         {/* Category Pills */}
         <div className="pos__categories">
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat.key}
               className={`pos__category-pill ${activeCategory === cat.key ? 'pos__category-pill--active' : ''}`}
@@ -366,33 +483,64 @@ export const PosPage = () => {
         {/* Products Grid */}
         <div className="pos__grid-wrapper">
           <div className="pos__grid">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                className="pos__product-card"
-                onClick={() => addToCart(product)}
-              >
-                <div>
-                  <div className="pos__product-name">{product.name}</div>
-                  <div className="pos__product-stock">Stock: {product.stock} uds.</div>
-                </div>
-                <div className="pos__product-footer">
-                  <span className="pos__product-price">S/ {product.price.toFixed(2)}</span>
-                  <span className="pos__product-add">
-                    <Plus size={16} />
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {filteredProducts.length === 0 && (
+            {isLoadingProducts ? (
               <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-muted)' }}>
-                <Search size={40} style={{ opacity: 0.15, marginBottom: '0.75rem' }} />
-                <p style={{ fontWeight: 600 }}>No se encontraron productos</p>
-                <p style={{ fontSize: '0.8125rem', marginTop: '0.25rem' }}>
-                  Intenta con otro término de búsqueda o categoría
-                </p>
+                <Loader2 size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', animation: 'spin 1s linear infinite' }} />
+                <p style={{ fontWeight: 600 }}>Cargando productos...</p>
               </div>
+            ) : loadError ? (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-danger, #ef4444)' }}>
+                <AlertCircle size={40} style={{ opacity: 0.5, marginBottom: '0.75rem' }} />
+                <p style={{ fontWeight: 600 }}>{loadError}</p>
+                <button
+                  onClick={() => loadProducts()}
+                  style={{
+                    marginTop: '1rem',
+                    padding: '0.5rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    border: '1px solid currentColor',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Reintentar
+                </button>
+              </div>
+            ) : (
+              <>
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="pos__product-card"
+                    onClick={() => addToCart(product)}
+                  >
+                    <div>
+                      <div className="pos__product-name">{product.name}</div>
+                      <div className="pos__product-stock">
+                        {product.unit} | {product.category}
+                      </div>
+                    </div>
+                    <div className="pos__product-footer">
+                      <span className="pos__product-price">S/ {product.price.toFixed(2)}</span>
+                      <span className="pos__product-add">
+                        <Plus size={16} />
+                      </span>
+                    </div>
+                  </div>
+                ))}
+
+                {filteredProducts.length === 0 && (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-muted)' }}>
+                    <Search size={40} style={{ opacity: 0.15, marginBottom: '0.75rem' }} />
+                    <p style={{ fontWeight: 600 }}>No se encontraron productos</p>
+                    <p style={{ fontSize: '0.8125rem', marginTop: '0.25rem' }}>
+                      Intenta con otro término de búsqueda o categoría
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -448,6 +596,86 @@ export const PosPage = () => {
             {renderCartContent()}
           </div>
         </>
+      )}
+
+      {/* ── Success Modal ── */}
+      {showSuccessModal && lastSale && pdfPreviewUrl && (
+        <div className="pos__modal-overlay" onClick={closeSuccessModal}>
+          <div className="pos__modal pos__modal--with-pdf" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="pos__modal-close"
+              onClick={closeSuccessModal}
+              aria-label="Cerrar"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="pos__modal-header">
+              <div className="pos__modal-icon-success">
+                <CheckCircle2 size={32} />
+              </div>
+              <h2 className="pos__modal-title">¡Venta Exitosa!</h2>
+              <p className="pos__modal-subtitle">
+                El comprobante se generó correctamente.
+              </p>
+              <div className="pos__modal-total">
+                S/ {saleTotal.toFixed(2)}
+              </div>
+            </div>
+
+            <div className="pos__pdf-preview">
+              <iframe
+                src={pdfPreviewUrl}
+                title="Vista previa del comprobante"
+                className="pos__pdf-iframe"
+              />
+            </div>
+
+            <div className="pos__modal-actions">
+              <button
+                type="button"
+                className="pos__modal-btn pos__modal-btn--primary"
+                onClick={handlePrintReceipt}
+              >
+                <Printer size={18} />
+                Imprimir Comprobante
+              </button>
+
+              <button
+                type="button"
+                className="pos__modal-btn pos__modal-btn--secondary"
+                onClick={handleDownloadReceipt}
+              >
+                <Download size={18} />
+                Descargar PDF
+              </button>
+
+              <button
+                type="button"
+                className="pos__modal-btn pos__modal-btn--whatsapp"
+                onClick={() => {
+                  const url = `https://wa.me/?text=Aquí%20tienes%20tu%20comprobante%20de%20GOCus%20por%20S/%20${saleTotal.toFixed(2)}`;
+                  window.open(url, '_blank');
+                }}
+              >
+                <MessageCircle size={18} />
+                Enviar por WhatsApp
+              </button>
+            </div>
+
+            <div className="pos__modal-footer">
+              <button
+                type="button"
+                className="pos__modal-btn pos__modal-btn--outline"
+                onClick={resetPos}
+              >
+                <PlusCircle size={18} />
+                Nueva Venta
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
